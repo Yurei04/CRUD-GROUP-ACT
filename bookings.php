@@ -9,10 +9,18 @@ if (!isLoggedIn()) {
 }
 
 // Fetch services
-$services = $conn->query("SELECT * FROM services ORDER BY service_name ASC");
+$services_result = $conn->query("SELECT * FROM services ORDER BY service_name ASC");
+$services = [];
+while ($row = $services_result->fetch_assoc()) {
+    $services[] = $row;
+}
 
 // Fetch therapists
-$therapists = $conn->query("SELECT user_id, full_name FROM users WHERE role = 'therapist' ORDER BY full_name ASC");
+$therapists_result = $conn->query("SELECT user_id, full_name FROM users WHERE role = 'therapist' ORDER BY full_name ASC");
+$therapists = [];
+while ($row = $therapists_result->fetch_assoc()) {
+    $therapists[] = $row;
+}
 
 // Get pre-selected service if any
 $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) : 0;
@@ -236,6 +244,9 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
             background: #f5f5f5;
             color: #999;
             cursor: not-allowed;
+            text-decoration: line-through;
+            opacity: 0.6;
+            border-color: #f5f5f5;
         }
         
         .summary-item {
@@ -261,7 +272,7 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
             font-weight: 700;
         }
         
-        .btn-next {
+        .btn-next, .btn-submit {
             background: var(--earth-brown);
             color: white;
             border: none;
@@ -271,9 +282,10 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
             transition: all 0.3s ease;
         }
         
-        .btn-next:hover {
+        .btn-next:hover, .btn-submit:hover {
             background: var(--text-dark);
             transform: translateY(-2px);
+            color: white;
         }
         
         .btn-prev {
@@ -289,6 +301,13 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
         .btn-prev:hover {
             background: var(--text-dark);
             color: white;
+        }
+
+        .validation-message {
+            color: #dc3545;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+            font-weight: 600;
         }
     </style>
 </head>
@@ -342,6 +361,9 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
         </div>
 
         <div class="booking-card">
+            <!-- Added validation message container for Step 1 -->
+            <div class="validation-message text-center mb-3" id="step1ValidationMessage"></div>
+            
             <form id="bookingForm" method="POST" action="process_booking.php">
                 <!-- Step 1: Service & Therapist -->
                 <div class="step-content active" data-step="1">
@@ -349,47 +371,51 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
                     
                     <div class="mb-4">
                         <label class="form-label">Choose a Service</label>
-                        <?php while ($service = $services->fetch_assoc()): ?>
-                        <label class="service-option <?= $service['service_id'] == $selected_service_id ? 'selected' : '' ?>">
-                            <input type="radio" name="service_id" value="<?= $service['service_id'] ?>" 
-                                   data-price="<?= $service['price'] ?>" 
-                                   data-duration="<?= $service['duration'] ?>"
-                                   data-name="<?= htmlspecialchars($service['service_name']) ?>"
-                                   <?= $service['service_id'] == $selected_service_id ? 'checked' : '' ?> required>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong><?= htmlspecialchars($service['service_name']) ?></strong>
-                                    <div class="text-muted small">
-                                        <i class="far fa-clock"></i> <?= $service['duration'] ?> minutes
+                        <div id="serviceSelection">
+                            <?php foreach ($services as $service): ?>
+                            <label class="service-option <?= $service['service_id'] == $selected_service_id ? 'selected' : '' ?>">
+                                <input type="radio" name="service_id" value="<?= $service['service_id'] ?>" 
+                                        data-price="<?= $service['price'] ?>" 
+                                        data-duration="<?= $service['duration'] ?>"
+                                        data-name="<?= htmlspecialchars($service['service_name']) ?>"
+                                        <?= $service['service_id'] == $selected_service_id ? 'checked' : '' ?> required>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong><?= htmlspecialchars($service['service_name']) ?></strong>
+                                        <div class="text-muted small">
+                                            <i class="far fa-clock"></i> <?= $service['duration'] ?> minutes
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="h5 mb-0" style="color: var(--dark-yellow);">
+                                            ₱<?= number_format($service['price'], 2) ?>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="text-end">
-                                    <div class="h5 mb-0" style="color: var(--dark-yellow);">
-                                        ₱<?= number_format($service['price'], 2) ?>
-                                    </div>
-                                </div>
-                            </div>
-                        </label>
-                        <?php endwhile; ?>
+                            </label>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
                     
                     <div class="mb-4">
                         <label class="form-label">Choose Your Therapist</label>
-                        <?php while ($therapist = $therapists->fetch_assoc()): ?>
-                        <label class="therapist-card">
-                            <input type="radio" name="therapist_id" value="<?= $therapist['user_id'] ?>"
-                                   data-name="<?= htmlspecialchars($therapist['full_name']) ?>" required>
-                            <div class="d-flex align-items-center">
-                                <div class="me-3">
-                                    <i class="fas fa-user-circle fa-2x" style="color: var(--earth-brown);"></i>
+                        <div id="therapistSelection">
+                            <?php foreach ($therapists as $therapist): ?>
+                            <label class="therapist-card">
+                                <input type="radio" name="therapist_id" value="<?= $therapist['user_id'] ?>"
+                                        data-name="<?= htmlspecialchars($therapist['full_name']) ?>" required>
+                                <div class="d-flex align-items-center">
+                                    <div class="me-3">
+                                        <i class="fas fa-user-circle fa-2x" style="color: var(--earth-brown);"></i>
+                                    </div>
+                                    <div>
+                                        <strong><?= htmlspecialchars($therapist['full_name']) ?></strong>
+                                        <div class="text-muted small">Licensed Therapist</div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <strong><?= htmlspecialchars($therapist['full_name']) ?></strong>
-                                    <div class="text-muted small">Licensed Therapist</div>
-                                </div>
-                            </div>
-                        </label>
-                        <?php endwhile; ?>
+                            </label>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
                     
                     <div class="text-end">
@@ -406,15 +432,21 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
                     <div class="mb-4">
                         <label class="form-label">Select Date</label>
                         <input type="date" name="appointment_date" id="appointmentDate" 
-                               class="form-control" required
-                               min="<?= date('Y-m-d', strtotime('+1 day')) ?>">
+                                class="form-control" required
+                                min="<?= date('Y-m-d', strtotime('+1 day')) ?>">
+                        <div class="validation-message" id="dateError"></div>
                     </div>
                     
                     <div class="mb-4">
                         <label class="form-label">Select Time</label>
-                        <div class="row g-2" id="timeSlots">
-                            <!-- Time slots will be generated by JavaScript -->
+                        <!-- Loading Indicator for AJAX -->
+                        <div id="timeSlotsLoading" class="text-center my-3 text-muted" style="display: none;">
+                            <i class="fas fa-spinner fa-spin me-2"></i> Checking availability...
                         </div>
+                        <div class="row g-2" id="timeSlots">
+                            <p class="text-muted mt-2 ps-3">Select a date and therapist to view available times.</p>
+                        </div>
+                        <div class="validation-message" id="timeError"></div>
                         <input type="hidden" name="start_time" id="selectedTime" required>
                     </div>
                     
@@ -463,17 +495,18 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
                         <label class="form-label">Payment Method</label>
                         <select name="payment_method" class="form-select" required>
                             <option value="">Choose payment method</option>
-                            <option value="cash">Cash</option>
-                            <option value="credit_card">Credit Card</option>
-                            <option value="gcash">GCash</option>
+                            <option value="cash">Cash on Site</option>
+                            <option value="credit_card">Credit Card (Pay Now)</option>
+                            <option value="gcash">GCash (Pay Now)</option>
                         </select>
+                        <div class="validation-message" id="paymentError"></div>
                     </div>
                     
                     <div class="mb-4">
                         <label class="form-label">Promo Code (Optional)</label>
                         <div class="input-group">
                             <input type="text" name="promo_code" class="form-control" 
-                                   placeholder="Enter promo code">
+                                    placeholder="Enter promo code">
                             <button type="button" class="btn" style="background: var(--primary-yellow);">
                                 Apply
                             </button>
@@ -484,7 +517,7 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
                         <button type="button" class="btn btn-prev" onclick="prevStep()">
                             <i class="fas fa-arrow-left"></i> Previous
                         </button>
-                        <button type="submit" class="btn btn-next">
+                        <button type="submit" class="btn btn-next btn-submit">
                             <i class="fas fa-check"></i> Confirm Booking
                         </button>
                     </div>
@@ -498,12 +531,31 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
         let currentStep = 1;
         const totalSteps = 3;
         
+        // Helper function for visual validation feedback (replacing alert())
+        function showValidationMessage(message, elementId) {
+            const el = document.getElementById(elementId);
+            el.textContent = message;
+            el.style.display = message ? 'block' : 'none';
+        }
+
+        function clearValidationMessages() {
+            document.querySelectorAll('.validation-message').forEach(el => el.textContent = '');
+            document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+        }
+
         // Handle service selection
         document.querySelectorAll('.service-option').forEach(option => {
             option.addEventListener('click', function() {
                 document.querySelectorAll('.service-option').forEach(o => o.classList.remove('selected'));
                 this.classList.add('selected');
-                this.querySelector('input[type="radio"]').checked = true;
+                const radio = this.querySelector('input[type="radio"]');
+                radio.checked = true;
+                showValidationMessage('', 'step1ValidationMessage'); // Clear validation
+                
+                // If therapist and date are already set, re-fetch slots
+                if (document.getElementById('appointmentDate').value && document.querySelector('input[name="therapist_id"]:checked')) {
+                    fetchAvailableSlots();
+                }
             });
         });
         
@@ -512,62 +564,166 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
             card.addEventListener('click', function() {
                 document.querySelectorAll('.therapist-card').forEach(c => c.classList.remove('selected'));
                 this.classList.add('selected');
-                this.querySelector('input[type="radio"]').checked = true;
+                const radio = this.querySelector('input[type="radio"]');
+                radio.checked = true;
+                showValidationMessage('', 'step1ValidationMessage'); // Clear validation
+
+                // If service and date are already set, re-fetch slots
+                if (document.getElementById('appointmentDate').value && document.querySelector('input[name="service_id"]:checked')) {
+                    fetchAvailableSlots();
+                }
             });
         });
         
-        // Generate time slots
-        function generateTimeSlots() {
+        // Function to fetch and display available time slots (AJAX)
+        async function fetchAvailableSlots() {
+            const date = document.getElementById('appointmentDate').value;
+            const service = document.querySelector('input[name="service_id"]:checked');
+            const therapist = document.querySelector('input[name="therapist_id"]:checked');
             const container = document.getElementById('timeSlots');
-            const times = ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
+            const loading = document.getElementById('timeSlotsLoading');
+            const selectedTimeInput = document.getElementById('selectedTime');
             
+            // Reset state
             container.innerHTML = '';
-            times.forEach(time => {
-                const col = document.createElement('div');
-                col.className = 'col-6 col-md-3';
-                col.innerHTML = `
-                    <div class="time-slot" data-time="${time}">
-                        ${time}
-                    </div>
-                `;
-                container.appendChild(col);
-            });
+            selectedTimeInput.value = '';
+            showValidationMessage('', 'timeError');
             
-            // Add click handlers
-            document.querySelectorAll('.time-slot').forEach(slot => {
-                slot.addEventListener('click', function() {
-                    if (!this.classList.contains('unavailable')) {
-                        document.querySelectorAll('.time-slot').forEach(s => s.classList.remove('selected'));
-                        this.classList.add('selected');
-                        document.getElementById('selectedTime').value = this.dataset.time;
-                    }
+            if (!date || !service || !therapist) {
+                container.innerHTML = '<p class="text-muted mt-2 ps-3">Please select a service, therapist, and date to check availability.</p>';
+                return;
+            }
+
+            loading.style.display = 'block';
+
+            const formData = new FormData();
+            formData.append('appointment_date', date);
+            formData.append('service_id', service.value);
+            formData.append('therapist_id', therapist.value);
+
+            try {
+                const response = await fetch('fetch_slots.php', {
+                    method: 'POST',
+                    body: formData
                 });
-            });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    if (data.slots.length > 0) {
+                        data.slots.forEach(slot => {
+                            const isAvailable = slot.available;
+                            const slotClass = isAvailable ? '' : 'unavailable';
+                            
+                            const col = document.createElement('div');
+                            col.className = 'col-6 col-md-3';
+                            col.innerHTML = `
+                                <div class="time-slot ${slotClass}" data-time="${slot.time}">
+                                    ${slot.time}
+                                </div>
+                            `;
+                            container.appendChild(col);
+                        });
+                        
+                        // Add click handlers for new slots
+                        document.querySelectorAll('.time-slot:not(.unavailable)').forEach(slot => {
+                            slot.addEventListener('click', function() {
+                                document.querySelectorAll('.time-slot').forEach(s => s.classList.remove('selected'));
+                                this.classList.add('selected');
+                                selectedTimeInput.value = this.dataset.time;
+                                showValidationMessage('', 'timeError'); // Clear time validation on selection
+                            });
+                        });
+                        
+                    } else {
+                        container.innerHTML = '<p class="text-danger mt-2 ps-3">No available slots for this date and therapist. Please try a different day or therapist.</p>';
+                    }
+                } else {
+                    container.innerHTML = `<p class="text-danger mt-2 ps-3">Error fetching slots: ${data.message}</p>`;
+                }
+
+            } catch (error) {
+                console.error('Fetch error:', error);
+                container.innerHTML = '<p class="text-danger mt-2 ps-3">Could not connect to the server to check availability.</p>';
+            } finally {
+                loading.style.display = 'none';
+            }
         }
         
-        // Initialize time slots when date is selected
-        document.getElementById('appointmentDate')?.addEventListener('change', generateTimeSlots);
-        
+        // Trigger fetch when date, service, or therapist changes
+        document.getElementById('appointmentDate')?.addEventListener('change', fetchAvailableSlots);
+        document.querySelectorAll('input[name="service_id"]').forEach(radio => radio.addEventListener('change', fetchAvailableSlots));
+        document.querySelectorAll('input[name="therapist_id"]').forEach(radio => radio.addEventListener('change', fetchAvailableSlots));
+
+        // Initial check for pre-selected service
+        window.addEventListener('load', () => {
+            if (document.querySelector('input[name="service_id"]:checked')) {
+                // Pre-select the first therapist if a service is already selected, and we don't have one selected yet
+                if (!document.querySelector('input[name="therapist_id"]:checked')) {
+                    const firstTherapist = document.querySelector('.therapist-card input[type="radio"]');
+                    if (firstTherapist) {
+                        firstTherapist.checked = true;
+                        firstTherapist.closest('.therapist-card').classList.add('selected');
+                    }
+                }
+            }
+        });
+
+
         function nextStep() {
-            // Validate current step
-            const currentContent = document.querySelector(`.step-content[data-step="${currentStep}"]`);
-            const inputs = currentContent.querySelectorAll('input[required], select[required]');
+            clearValidationMessages();
             let isValid = true;
             
-            inputs.forEach(input => {
-                if (input.type === 'radio') {
-                    const name = input.name;
-                    if (!document.querySelector(`input[name="${name}"]:checked`)) {
+            if (currentStep === 1) {
+                // Step 1 Validation: Service and Therapist must be selected
+                if (!document.querySelector('input[name="service_id"]:checked')) {
+                    showValidationMessage('Please select a service.', 'step1ValidationMessage');
+                    isValid = false;
+                }
+                if (!document.querySelector('input[name="therapist_id"]:checked')) {
+                    if (isValid) showValidationMessage('Please select a therapist.', 'step1ValidationMessage');
+                    isValid = false;
+                }
+            } else if (currentStep === 2) {
+                // Step 2 Validation: Date and Time must be selected
+                const dateInput = document.getElementById('appointmentDate');
+                const timeInput = document.getElementById('selectedTime');
+                
+                if (!dateInput.value) {
+                    dateInput.classList.add('is-invalid');
+                    showValidationMessage('Please select an appointment date.', 'dateError');
+                    isValid = false;
+                }
+                
+                if (!timeInput.value) {
+                    // Also check if slots were loaded and none were selected
+                    const selectedSlot = document.querySelector('.time-slot.selected');
+                    if (!selectedSlot) {
+                        showValidationMessage('Please select an available time slot.', 'timeError');
                         isValid = false;
                     }
-                } else if (!input.value) {
-                    isValid = false;
-                    input.classList.add('is-invalid');
                 }
-            });
+
+            } else if (currentStep === 3) {
+                // Step 3 Validation: Payment method must be selected
+                const paymentSelect = document.querySelector('select[name="payment_method"]');
+                if (!paymentSelect.value) {
+                    paymentSelect.classList.add('is-invalid');
+                    showValidationMessage('Please select a payment method.', 'paymentError');
+                    isValid = false;
+                }
+            }
             
             if (!isValid) {
-                alert('Please fill in all required fields');
+                // If there's an error in step 1, scroll to the message
+                if (currentStep === 1) {
+                    document.getElementById('step1ValidationMessage').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+                // Stop progression if validation fails
                 return;
             }
             
@@ -602,6 +758,7 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
         }
         
         function prevStep() {
+            clearValidationMessages();
             if (currentStep > 1) {
                 document.querySelector(`.step[data-step="${currentStep}"]`).classList.remove('active');
                 
@@ -631,7 +788,9 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
             if (service) {
                 document.getElementById('summaryService').textContent = service.dataset.name;
                 document.getElementById('summaryDuration').textContent = service.dataset.duration + ' minutes';
-                document.getElementById('summaryPrice').textContent = '₱' + parseFloat(service.dataset.price).toLocaleString('en-PH', {minimumFractionDigits: 2});
+                // Use the data-price for display
+                const price = parseFloat(service.dataset.price);
+                document.getElementById('summaryPrice').textContent = '₱' + price.toLocaleString('en-PH', {minimumFractionDigits: 2});
             }
             
             if (therapist) {
@@ -639,7 +798,8 @@ $selected_service_id = isset($_GET['service_id']) ? intval($_GET['service_id']) 
             }
             
             if (date) {
-                const dateObj = new Date(date);
+                // Format the date nicely for the summary
+                const dateObj = new Date(date + 'T00:00:00'); // Add time to prevent timezone issues
                 document.getElementById('summaryDate').textContent = dateObj.toLocaleDateString('en-US', {
                     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
                 });

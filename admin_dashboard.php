@@ -8,20 +8,30 @@ if (!isLoggedIn() || !isAdmin()) {
 
 // Get statistics
 $total_appointments = $conn->query("SELECT COUNT(*) as count FROM appointments")->fetch_assoc()['count'];
+// Assuming staff are also users, but we still count only 'customers' for customer count
 $total_customers = $conn->query("SELECT COUNT(*) as count FROM users WHERE role = 'customer'")->fetch_assoc()['count'];
 $total_revenue = $conn->query("SELECT SUM(amount) as total FROM payments WHERE payment_status = 'paid'")->fetch_assoc()['total'] ?? 0;
 $pending_appointments = $conn->query("SELECT COUNT(*) as count FROM appointments WHERE status = 'pending'")->fetch_assoc()['count'];
 
-// Recent appointments
+// --- UPDATED RECENT APPOINTMENTS QUERY ---
+// The old query failed because 'appointments.therapist_id' no longer exists.
+// We now join on the new 'appointments.staff_id' which links to the 'staff' table.
+// We then join from 'staff' to 'users' (u2) to get the staff's name.
 $recent_appointments = $conn->query("
-    SELECT a.*, s.service_name, u1.full_name as customer_name, u2.full_name as therapist_name
+    SELECT 
+        a.*, 
+        s.service_name, 
+        u1.full_name as customer_name, 
+        u2.full_name as staff_name -- Now fetching the staff member's name
     FROM appointments a
     JOIN services s ON a.service_id = s.service_id
     JOIN users u1 ON a.user_id = u1.user_id
-    JOIN users u2 ON a.therapist_id = u2.user_id
+    JOIN staff st ON a.staff_id = st.staff_id -- JOIN staff table first
+    JOIN users u2 ON st.user_id = u2.user_id -- Then join staff to the users table (u2) to get the name
     ORDER BY a.created_at DESC
     LIMIT 10
 ");
+// ----------------------------------------
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -160,11 +170,16 @@ $recent_appointments = $conn->query("
                     <a href="admin_services.php" class="sidebar-link">
                         <i class="fas fa-spa"></i> Services
                     </a>
-                    <a href="admin_users.php" class="sidebar-link">
-                        <i class="fas fa-users"></i> Users
+                    <!-- NEW LINK: Categories is essential since you created the table -->
+                    <a href="admin_categories.php" class="sidebar-link">
+                        <i class="fas fa-sitemap"></i> Categories
                     </a>
-                    <a href="admin_therapists.php" class="sidebar-link">
-                        <i class="fas fa-user-md"></i> Therapists
+                    <!-- UPDATED LINK: Renamed from Therapists to Staff to reflect the new table name -->
+                    <a href="admin_staff.php" class="sidebar-link"> 
+                        <i class="fas fa-user-tie"></i> Staff
+                    </a>
+                    <a href="admin_users.php" class="sidebar-link">
+                        <i class="fas fa-users"></i> Users (Clients)
                     </a>
                     <a href="admin_payments.php" class="sidebar-link">
                         <i class="fas fa-money-bill"></i> Payments
@@ -232,7 +247,7 @@ $recent_appointments = $conn->query("
                                     <th>ID</th>
                                     <th>Customer</th>
                                     <th>Service</th>
-                                    <th>Therapist</th>
+                                    <th>Staff</th> <!-- UPDATED COLUMN HEADER -->
                                     <th>Date</th>
                                     <th>Time</th>
                                     <th>Status</th>
@@ -245,7 +260,7 @@ $recent_appointments = $conn->query("
                                     <td>#<?= $apt['appointment_id'] ?></td>
                                     <td><?= htmlspecialchars($apt['customer_name']) ?></td>
                                     <td><?= htmlspecialchars($apt['service_name']) ?></td>
-                                    <td><?= htmlspecialchars($apt['therapist_name']) ?></td>
+                                    <td><?= htmlspecialchars($apt['staff_name']) ?></td> <!-- UPDATED VARIABLE -->
                                     <td><?= date('M j, Y', strtotime($apt['appointment_date'])) ?></td>
                                     <td><?= date('g:i A', strtotime($apt['start_time'])) ?></td>
                                     <td>
@@ -259,7 +274,7 @@ $recent_appointments = $conn->query("
                                     </td>
                                     <td>
                                         <a href="admin_appointment_view.php?id=<?= $apt['appointment_id'] ?>" 
-                                           class="btn btn-sm btn-outline-primary">
+                                            class="btn btn-sm btn-outline-primary">
                                             <i class="fas fa-eye"></i>
                                         </a>
                                     </td>
